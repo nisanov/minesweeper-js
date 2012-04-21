@@ -7,14 +7,15 @@
 
 var minesweeper = {
 	
-	size     : 8,            // Track the size of the game board
-	locked   : false,        // Track the locked state of the game board
+	size     : 8,      // Track the size of the game board
+	detected : 0,      // Track the number of clearances detected
+	locked   : false,  // Track the locked state of the game board
 	
-	mine     : {             // The mine object
-		
-		count    : 0,        // Track the number of mines
-		position : [],       // Track the mine positions
-		cleared  : []        // Track the cleared mines
+	mine     : {       // The mine object
+	
+		count    : 0,  // Track the number of mines
+		position : [], // Track the mine positions
+		cleared  : []  // Track the cleared squares
 	},
 	
     /**
@@ -40,15 +41,12 @@ var minesweeper = {
 		
 		if ( ! $.cookie("minesweeper_size") ) this.dom.load.attr("disabled", "disabled"); // Disable the load button if no saved game is detected
 		
-		this.dom.board.on("lock", null, this, this.lock);         // Bind custom game board lock trigger
-		this.dom.board.on("unlock", null, this, this.unlock);     // Bind custom game board unlock trigger		
-
-		this.dom.create.on("click", null, this, this.create);     // Create event binds to each game element
-		this.dom.validate.on("click", null, this, this.validate); // Validate the game board
-		this.dom.cheat.on("click", null, this, this.cheat);       // Display the mine locations		
-
-		this.dom.save.on("click", null, this, this.save);         // Bind the event trigger to save the game board
-		this.dom.load.on("click", null, this, this.load);         // Bind the event trigger to load the saved game board state
+		this.dom.board.on("lock", $.proxy(this.lock, this));     // Bind custom game board lock trigger
+		this.dom.board.on("unlock", $.proxy(this.unlock, this)); // Bind custom game board unlock trigger
+		this.dom.create.on("click", $.proxy(this.create, this)); // Create event binds to each game element
+		this.dom.cheat.on("click", $.proxy(this.cheat, this));   // Display the mine locations		
+		this.dom.save.on("click", $.proxy(this.save, this));     // Bind the event trigger to save the game board
+		this.dom.load.on("click", $.proxy(this.load, this));     // Bind the event trigger to load the saved game board state
 		
 		this.dom.mode.val(this.size); // Ensure that the game mode reflects the mode set in initialization
 		
@@ -59,20 +57,19 @@ var minesweeper = {
 	
 	/**
 	 * Create the minesweeper game board
+	 * 
      * @param  integer size The size of the game board grid
 	 */
 	create          : function(size) {
 
-		size && size.data && $.extend(this, size.data);
-
-		var position = 1, col = undefined, row = undefined, span = undefined
-		
+		this.dom.cheat.text("Cheat"); // Ensure that the cheat button text is reset
 		this.dom.board.trigger("unlock").empty(); // Reset the locked state and empty the game board
 
-		this.size = parseInt( isNaN(size) ? this.dom.mode.val() : this.dom.mode.val(size).val() ); // Set the size based on the game mode selected or from the initial size
-
-		this.dom.cheat.text("Cheat"); // Ensure that the cheat button text is reset
+		this.size     = parseInt( isNaN(size) ? this.dom.mode.val() : this.dom.mode.val(size).val() ); // Set the size based on the game mode selected or from the initial size
+		this.detected = 0;
 		
+		var position = 1, col = undefined, row = undefined, span = undefined
+
 		for ( col = 0; col < this.size; col++ ) { // Create for each column
 			
 			for ( row = 0; row < this.size; row++ ) { // Create for each row
@@ -84,53 +81,64 @@ var minesweeper = {
 				this.dom.board.append(span);
 			}
 		}
-		
-		// Create an internal reference to each game board square
-		this.dom.square = $(".ms-board-square")
-		
-			.on("click", null, this, function(e) { // Process mine detection test
 				
-				if ( ! e.data.locked && ! $(this).hasClass("flagged") && ! $(this).hasClass("cleared") && ! $(this).hasClass("exploded") ) { // Ensure that the game board square is not locked, flagged, cleared or exploded
-					
-					$(this).addClass("cleared");
-					
-					e.data.dom.save.removeAttr("disabled"); // Enabled save
-					
-					if ( e.data.armed( parseInt($(this).attr("for")) ) ) { // Mine detected GAME OVER
-						
-						for ( var i in e.data.mine.position ) { // Explode all mine locations
-
-							$(e.data.dom.square[e.data.mine.position[i] - 1]).toggleClass("exploded");
-						}
-						
-						if ( confirm("GAME OVER !!!\n\nNew Game ?") ) {
-							
-							e.data.create();
-						}
-						else e.data.dom.board.trigger("lock");
-					}
-					else { // NO mines detected; tile cleared
-						
-						var detected = e.data.scan( parseInt($(this).attr("for")) );
-						
-						$(this).text(detected || "");
-						
-						if ( ! detected ) { // No mines where detected in the current radius
-							
-							e.data.clear( parseInt($(this).attr("for")) );
-						}
-					}
-				}
-			})
-			
-			.on("contextmenu", null, this, function(e) { // Toggle flag class if the game board is not locked and not already cleared
-				
-				if ( ! e.data.locked && ! $(this).hasClass("cleared") ) $(this).toggleClass("flagged");
-				
-				return false; // Bypass context menu
-			});
+		this.dom.square = $(".ms-board-square").on("click", $.proxy(this.click, this)).on("contextmenu", $.proxy(this.flag, this)); // Create an internal reference to each game board square and event triggers for clicking and flagging
 
 		this.arm(); // Call to configure and arm the mines
+	},
+
+
+	/**
+	 * Click a square to check for mines
+	 * 
+	 * @param  Event event The event object to identify the source
+	 */
+	click           : function(event) {
+
+		var source = event.target || event.srcElement;
+
+		if ( ! this.locked && ! $(source).hasClass("flagged") && ! $(source).hasClass("cleared") && ! $(source).hasClass("exploded") ) { // Ensure that the game board square is not locked, flagged, cleared or exploded
+			
+			this.detected++;
+			
+			$(source).addClass("cleared");
+			
+			this.dom.save.removeAttr("disabled"); // Ensure that the save button is enabled
+			
+			if ( this.armed( parseInt($(source).attr("for")) ) ) { // Mine detected GAME OVER
+				
+				for ( var i in this.mine.position ) $(this.dom.square[this.mine.position[i] - 1]).toggleClass("exploded"); // Explode all mine locations
+				
+				confirm("GAME OVER !!!\n\nNew Game ?") ? this.create() : this.dom.board.trigger("lock");
+			}
+			else { // NO mines detected; tile cleared
+				
+				var detected = this.scan( parseInt($(source).attr("for")) );
+				
+				$(source).text(detected || "");
+				
+				if ( ! detected ) this.clear( parseInt($(source).attr("for")) ); // No mines where detected in the current radius
+
+				if ( this.detected == this.mine.cleared.length ) { // Game complete when the number detected matches the number of clear squares
+
+					confirm("CONGRATULATIONS !!!\n\nYou have successfully cleared the game board.\n\nNew Game ?") ? this.create() : this.dom.board.trigger("lock");
+				}
+			}
+		}
+	},
+
+	/**
+	 * Flag the square
+	 * 
+     * @param  Event event The event object to identify the source
+	 */
+	flag            : function(event) {
+
+		var source = event.target || event.srcElement;
+
+		if ( ! this.locked && ! $(source).hasClass("cleared") ) $(source).toggleClass("flagged");
+		
+		return false; // Bypass context menu
 	},
 	
 	/**
@@ -147,10 +155,7 @@ var minesweeper = {
 		
 		for ( var i = 1; i <= this.size * this.size; i++ ) this.mine.cleared.push(i); // Populate a temporary array with all the possible grid positions
 		
-		for ( var m = 1; m <= this.mine.count; m++  ) { // Randomly arm the mine positions
-			
-			this.mine.position.push( this.mine.cleared.splice( Math.floor( Math.random() * this.mine.cleared.length), 1 )[0] );
-		}
+		for ( var m = 1; m <= this.mine.count; m++ ) this.mine.position.push( this.mine.cleared.splice( Math.floor( Math.random() * this.mine.cleared.length), 1 )[0] ); // Randomly arm the mine positions
 	},
 	
 	/**
@@ -186,11 +191,20 @@ var minesweeper = {
 	// Clear an individual game board square
 	check           : function(id) {
 			
-			var detected = this.scan(id); // Get the number of surrounding mines detected
-			
-			$(this.dom.square[ id - 1 ]).text( detected || "" ); // Mark the current square
-			
-			detected ? $(this.dom.square[ id - 1 ]).addClass("cleared") : $(this.dom.square[ id - 1 ]).click(); // Clear when surrounding mines otherwise perform a psuedo click to trigger a clearance of surrounding mines
+		var detected = this.scan(id); // Get the number of surrounding mines detected
+		
+		$(this.dom.square[ id - 1 ]).text( detected || "" ); // Mark the current square
+		
+		if ( detected ) {
+
+			if ( ! $(this.dom.square[ id - 1 ]).hasClass("cleared") ) { // Ensure that the square has not already been cleared
+
+				$(this.dom.square[ id - 1 ]).addClass("cleared");
+
+				this.detected++;
+			}
+		} 
+		else $(this.dom.square[ id - 1 ]).click(); // Clear when surrounding mines otherwise perform a psuedo click to trigger a clearance of surrounding mines
 	},
 	
 	// Determine the number or mines in the raduis
@@ -262,56 +276,33 @@ var minesweeper = {
 	 * 
 	 * @param  Event e The event object containing a reference to this object in e.data
 	 */
-	lock            : function(e) {
+	lock            : function() {
 		
-		if ( ! e.data.locked ) { // Ensure that the game board is infact unlocked
+		if ( ! this.locked ) { // Ensure that the game board is infact unlocked
 
-			e.data.dom.cheat.attr("disabled", "disabled");
-			e.data.dom.validate.attr("disabled", "disabled");
-			e.data.dom.save.attr("disabled", "disabled");
+			this.dom.cheat.attr("disabled", "disabled");
+			this.dom.validate.attr("disabled", "disabled");
+			this.dom.save.attr("disabled", "disabled");
 			
-			e.data.locked = true;
+			this.locked = true;
 		}
 	},
 
 	/**
 	 * Unlock the game board
 	 * 
-	 * @param  Event e The event object containing a reference to this object in e.data
+	 * @param  Event e The event object containing a reference to this object in this
 	 */
-	unlock          : function(e) {
+	unlock          : function() {
 
-		if ( e.data.locked ) { // Ensure that the game board is infact locked
+		if ( this.locked ) { // Ensure that the game board is infact locked
 
-			e.data.dom.cheat.removeAttr("disabled");
-			e.data.dom.validate.removeAttr("disabled");
-			e.data.dom.save.attr("disabled", "disabled"); // Disable save because unlocking occurs during create game as save is only enabled after the first move
+			this.dom.cheat.removeAttr("disabled");
+			this.dom.validate.removeAttr("disabled");
+			this.dom.save.attr("disabled", "disabled"); // Disable save because unlocking occurs during create game as save is only enabled after the first move
 			
-			e.data.locked = false;
+			this.locked = false;
 		}
-	},
-
-	/**
-	 * Validate the game board
-	 * 
-	 * @param  Event e The event object containing a reference to this object in e.data
-	 */
-	validate        : function(e) {
-
-		if ( ! e.data.locked ) { // Ensure that the game board is not locked
-			
-			for ( var i in e.data.mine.cleared ) { // Scan all clear game board squares
-				
-				if ( ! $(e.data.dom.square[e.data.mine.cleared[i] - 1]).hasClass("cleared") ) { // A mine has not been cleared
-					
-					return ( confirm("GAME OVER !!!\n\nYou failed to clear the game board.\n\nNew Game ?") ? e.data.create() : e.data.dom.board.trigger("lock") );
-				}
-			}
-			
-			return ( confirm("CONGRATULATIONS !!!\n\nYou have successfully cleared the game board.\n\nNew Game ?") ? e.data.create() : e.data.dom.board.trigger("lock") );
-		}
-		
-		return false;		
 	},
 
 	/**
@@ -319,13 +310,13 @@ var minesweeper = {
 	 * 
 	 * @param  Event e The event object containing a reference to this object in e.data
 	 */
-	cheat           : function(e) {
+	cheat           : function() {
 
-		if ( ! e.data.locked ) { // Ensure that the game board is not already locked
+		if ( ! this.locked ) { // Ensure that the game board is not already locked
 			
-			for ( var i in e.data.mine.position ) $(e.data.dom.square[ e.data.mine.position[i] - 1 ]).toggleClass("exploded"); // Show the location for each mine
+			for ( var i in this.mine.position ) $(this.dom.square[ this.mine.position[i] - 1 ]).toggleClass("exploded"); // Show the location for each mine
 
-			$(this).text( $(this).text() == "Cheat" ? "Play" : "Cheat" ); // Toggle the applicable button label
+			this.dom.cheat.text( this.dom.cheat.text() == "Cheat" ? "Play" : "Cheat" ); // Toggle the applicable button label
 		}
 	},
 
@@ -334,21 +325,21 @@ var minesweeper = {
 	 * 
 	 * @param  Event e The event object containing a reference to this object in e.data
 	 */
-	save            : function(e) {
+	save            : function() {
 		
-		if ( ! e.data.locked ) { // Ensure that the game board is not locked
+		if ( ! this.locked ) { // Ensure that the game board is not locked
 			
 			var cleared = []; // Store all the ids of already cleared game board squares
 			
 			$(".ms-board-square.cleared").each(function() { cleared.push($(this).attr("for")); }); 
 			
-			$.cookie("minesweeper_size", e.data.dom.mode.val(), { 'expires': 31, 'path': "/" });
+			$.cookie("minesweeper_size", this.dom.mode.val(), { 'expires': 31, 'path': "/" });
 			$.cookie("minesweeper_selected", cleared, { 'expires': 31, 'path': "/" });
-			$.cookie("minesweeper_position", e.data.mine.position, { 'expires': 31, 'path': "/" });
-			$.cookie("minesweeper_cleared", e.data.mine.cleared, { 'expires': 31, 'path': "/" });
+			$.cookie("minesweeper_position", this.mine.position, { 'expires': 31, 'path': "/" });
+			$.cookie("minesweeper_cleared", this.mine.cleared, { 'expires': 31, 'path': "/" });
 			
-			e.data.dom.save.attr("disabled", "disabled"); // Disable save
-			e.data.dom.load.removeAttr("disabled");       // Ensure that the load button is enabled
+			this.dom.save.attr("disabled", "disabled"); // Disable save
+			this.dom.load.removeAttr("disabled");       // Ensure that the load button is enabled
 		}
 	},
 
@@ -357,21 +348,21 @@ var minesweeper = {
 	 * 
 	 * @param  Event e The event object containing a reference to this object in e.data
 	 */
-	load            : function(e) {
+	load            : function() {
 		
-		e.data.create($.cookie("minesweeper_size")); // Clear the current game board
+		this.create($.cookie("minesweeper_size")); // Clear the current game board
 		
-		e.data.mine.cleared = $.cookie("minesweeper_cleared").split(",").map(function(i) { return parseInt(i); });
-		e.data.mine.position = $.cookie("minesweeper_position").split(",").map(function(i) { return parseInt(i); });
-		e.data.mine.count = e.data.mine.position.length;
+		this.mine.cleared = $.cookie("minesweeper_cleared").split(",").map(function(i) { return parseInt(i); });
+		this.mine.position = $.cookie("minesweeper_position").split(",").map(function(i) { return parseInt(i); });
+		this.mine.count = this.mine.position.length;
 
 		var selected = $.cookie("minesweeper_selected").split(",").map(function(i) { return parseInt(i); });
 		
 		for ( var i in selected ) { // Mark store game board squares as cleared and 
 			
-			$(e.data.dom.square[ selected[i] - 1 ])
-				.addClass("cleared")                       // Clear the square
-				.text( e.data.scan( selected[i] ) || "" ); // Apply radius count as applicable
+			$(this.dom.square[ selected[i] - 1 ]).addClass("cleared").text( this.scan( selected[i] ) || "" ); // Clear the squares and apply radius count as applicable
+
+			this.detected++; // Accrue the detected clearances
 		}
 	}	
 };
