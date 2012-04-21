@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+    <head>   
+        <title>Minesweeper - Yasha Nisanov</title>
+
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <meta name="description" content="A minesweeper clone to demonstrate the coding abilities of Yasha Nisanov">
+        <meta name="author" content="Yasha Nisanov">
+
+        <link rel="stylesheet" href="css/main.css">
+
+        <script type="text/javascript" src="js/min/jquery-1.7.1.js"></script>
+        <script type="text/javascript" src="js/min/jquery.cookie.js"></script>
+        <script type="text/javascript" src="js/jquery.minesweeper.js"></script>        
+    </head>
+
+    <body>
+        <p><b>Instructions</b>: There are 10 hidden mines per 8 x 8 grid.  Right click tiles suspected of being clear and left click to flag tiles suspected of containing a mine.  Good Luck !</p>
+        
+        <label for="ms-mode">Game Mode:</label>
+        <select id="ms-mode">
+            <option value="8">8 x 8</option>
+            <option value="16">16 x 16</option>
+            <option value="32">32 x 32</option>
+        </select>
+        
+        <button id="ms-create">New Game</button> <br />
+
+        <span id="ms-board"></span> <br />
+        
+        <button id="ms-cheat" style="width: 60px;">Cheat</button>
+        <button id="ms-validate">Validate</button>
+        <button id="ms-save">Save</button>
+        <button id="ms-load">Load</button>
+        
+        <p>
+            <b>Legend</b>: 
+            <span class="ms-board-legend">&nbsp;</span> Not marked.
+            <span class="ms-board-legend cleared">&nbsp;</span> Marked as cleared.
+            <span class="ms-board-legend cleared">#</span> The number indicates the amount of surrounding mines.
+            <span class="ms-board-legend flagged">&nbsp;</span> Marked as flagged.
+            <span class="ms-board-legend exploded">&nbsp;</span> Exploded with a mine/Cheat mode indicates mines.
+        </p>
+    </body>
+</html>

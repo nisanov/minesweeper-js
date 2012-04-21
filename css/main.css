@@ -1,0 +1,76 @@
+/* 
+    Document   : css/main.css
+    Created on : 12-Mar-2012
+    Author     : Yasha Nisanov
+    Description: The stylesheet definiations applied to minesweeper.
+*/
+
+body {
+    
+    margin: 0;
+    padding: 0;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: 1.0em;
+    text-shadow: #FFF 1px 1px 0px;
+}
+
+button {
+    
+    text-align: center;
+}
+
+#ms-board { 
+    
+    margin: 20px 0 10px 0;
+    display: inline-block;
+    border: 1px solid #000;
+}
+    
+    .ms-board-legend {
+
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 1px solid #000;
+        background: #BCC9DE;
+        text-align: center;
+        font-weight: bold;
+        font-size: 0.7em;
+        line-height: 14px;
+    }
+
+    .ms-board-square {
+
+        float: left;
+        width: 20px;
+        height: 20px;
+        border: 1px solid #000;
+        background: #BCC9DE;
+        text-align: center;
+        text-shadow: none;
+        font-family: sans-serif;
+        font-weight: bold;
+        font-size: 0.7em;
+        line-height: 20px;
+    }
+    
+        .row {
+
+            clear: left;
+        }
+        
+        .cleared {
+            
+            background: transparent;
+        }
+        
+        .flagged {
+            
+            background: #FFD1BD;
+        }
+
+        .exploded {
+            
+            background: #660066;
+        }
+
